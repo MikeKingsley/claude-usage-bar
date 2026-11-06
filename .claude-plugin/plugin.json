@@ -1,1 +1,1 @@
-{ "name": "usage-bar", "version": "0.1.0", "description": "One-line session / weekly usage and prompt-cache warmth bar above the prompt; click to expand into a skill usage and cost breakdown.", "types": "./types/index.d.ts" }
+{ "name": "usage-bar", "version": "0.2.0", "description": "One-line session / weekly usage and prompt-cache warmth bar above the prompt; click to expand into a skill usage and cost breakdown.", "types": "./types/index.d.ts" }
