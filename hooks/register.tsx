@@ -18,6 +18,7 @@ const OPEN = { plugin: 'usage-bar', key: 'isOpen' } as const
 const SKILLS = { plugin: 'usage-bar', key: 'skills' } as const
 const KEEP = { plugin: 'usage-bar', key: 'keepWarm' } as const
 const TTL = { plugin: 'usage-bar', key: 'ttlMin' } as const
+const CTX = { plugin: 'usage-bar', key: 'contextTokens' } as const
 const PINGS = { plugin: 'usage-bar', key: 'pings' } as const
 const NO_LIMITS: Limits = { session: null, weekly: null }
 
@@ -30,7 +31,7 @@ const left = (iso: string | undefined, at: number) => {
   if (mins >= 1440) return `${Math.floor(mins / 1440)}d ${Math.floor((mins % 1440) / 60)}h`
   return mins >= 60 ? `${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, '0')}m` : `${mins}m`
 }
-const compact = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : `${Math.round(n)}`)
+const compact = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : `${Math.round(n)}`)
 
 const pick = (u: { rateLimits: { kind: string; percentUsed: number; resetsAt?: string }[] }): Limits => {
   const find = (k: string) => {
@@ -48,11 +49,12 @@ const cells = (pct: number, label: string) => {
   return [text.slice(0, filled), text.slice(filled)] as const
 }
 
-const barSvg = (pct: number, color: string) => {
+const barSvg = (pct: number, color: string, tip?: string) => {
   const W = 360, H = 14
   const fill = pct <= 0 ? 0 : Math.max(H, Math.min(W, (pct / 100) * W))
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" preserveAspectRatio="none">` +
+    (tip ? `<title>${tip}</title>` : '') +
     `<rect width="${W}" height="${H}" rx="7" fill="${C.track}"/>` +
     (fill > 0 ? `<rect width="${fill}" height="${H}" rx="7" fill="${color}"/>` : '') +
     `</svg>`
@@ -68,6 +70,7 @@ async function tick($: any) {
   const u = await $.session.usage()
   await $.state.set(LIMITS, pick(u))
   await $.state.set(NOW, t)
+  await $.state.set(CTX, u.context.tokens ?? 0)
 
   const keep = (await $.state.get(KEEP)).value ?? false
   const last = (await $.state.get(LAST)).value ?? 0
@@ -153,6 +156,7 @@ export const register: Register = on => {
     const stats = (await $.state.get(SKILLS)).value ?? {}
     const keep = (await $.state.get(KEEP)).value ?? false
     const ttl = (await $.state.get(TTL)).value ?? 60
+    const ctx = (await $.state.get(CTX)).value ?? 0
 
     const toggleOpen = async () => {
       const held = await $.state.get(OPEN)
@@ -173,11 +177,11 @@ export const register: Register = on => {
     }
 
     const table = $.ui.resolve(e)
-    const Svg = (table as unknown as { Svg?: (p: { source: string; alt: string; width?: number; height?: number }) => never }).Svg
+    const Svg = (table as unknown as { Svg?: (p: { source: string; alt: string; width?: number; height?: number; isInteractive?: true }) => never }).Svg
 
     // A rounded, full-section bar: an Svg where the surface has one, else cells.
-    const barView = (pct: number, label: string, color: string, alt: string) => {
-      if (Svg) return <Svg source={barSvg(pct, color)} alt={alt} height={14} />
+    const barView = (pct: number, label: string, color: string, alt: string, tip?: string) => {
+      if (Svg) return <Svg source={barSvg(pct, color, tip)} alt={alt} height={14} isInteractive={tip ? true : undefined} />
       const [x, y] = cells(pct, label)
       return (
         <Box flexDirection="row">
@@ -187,14 +191,17 @@ export const register: Register = on => {
       )
     }
 
-    const section = (title: string, value: string, right: string, bar: ReturnType<typeof barView>) => (
+    const section = (title: string, value: string, right: string, bar: ReturnType<typeof barView>, extra?: string) => (
       <Box flexDirection="column" flexGrow={1} gap={1}>
         <Box flexDirection="row" justifyContent="space-between">
           <Text>
             <Text dimColor>{title}</Text>
             <Text bold> {value}</Text>
           </Text>
-          <Text dimColor>{right}</Text>
+          <Box flexDirection="row" gap={1} alignItems="center">
+            {extra ? <Text size="footnote" color="#6f6f6f">{extra}</Text> : null}
+            <Text dimColor>{right}</Text>
+          </Box>
         </Box>
         {bar}
       </Box>
@@ -215,7 +222,14 @@ export const register: Register = on => {
       'cache',
       '',
       warm ? `${Math.ceil(remain / 60_000)}min` : 'cold',
-      barView(cachePct, '', remain < 60_000 ? C.warn : C.good, 'cache time left'),
+      barView(
+        cachePct,
+        '',
+        remain < 60_000 ? C.warn : C.good,
+        'cache time left',
+        ctx > 0 ? `Context: ${ctx.toLocaleString('en-US')} tokens` : 'Context: no response yet',
+      ),
+      ctx > 0 ? compact(ctx) : undefined,
     )
 
     const divider = <Box width={1} backgroundColor="#555555" />

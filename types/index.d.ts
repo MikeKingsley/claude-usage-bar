@@ -14,6 +14,7 @@ declare module 'claude-code' {
       keepWarm: boolean
       ttlMin: number
       pings: number
+      contextTokens: number
     }
   }
 }
