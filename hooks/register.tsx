@@ -49,8 +49,8 @@ const cells = (pct: number, label: string) => {
   return [text.slice(0, filled), text.slice(filled)] as const
 }
 
-const barSvg = (pct: number, color: string, tip?: string) => {
-  const W = 360, H = 14
+const barSvg = (pct: number, color: string, tip?: string, W = 360) => {
+  const H = 14
   const fill = pct <= 0 ? 0 : Math.max(H, Math.min(W, (pct / 100) * W))
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" preserveAspectRatio="none">` +
@@ -176,12 +176,13 @@ export const register: Register = on => {
       await $.store.set('ttlMin', next2)
     }
 
+    const isEditor = e.surface === 'vscode'
     const table = $.ui.resolve(e)
     const Svg = (table as unknown as { Svg?: (p: { source: string; alt: string; width?: number; height?: number; isInteractive?: true }) => never }).Svg
 
     // A rounded, full-section bar: an Svg where the surface has one, else cells.
     const barView = (pct: number, label: string, color: string, alt: string, tip?: string) => {
-      if (Svg) return <Svg source={barSvg(pct, color, tip)} alt={alt} height={14} isInteractive={tip ? true : undefined} />
+      if (Svg) return <Svg source={barSvg(pct, color, tip, isEditor ? 140 : 360)} alt={alt} height={14} isInteractive={tip ? true : undefined} />
       const [x, y] = cells(pct, label)
       return (
         <Box flexDirection="row">
@@ -192,7 +193,7 @@ export const register: Register = on => {
     }
 
     const section = (title: string, value: string, right: string, bar: ReturnType<typeof barView>, extra?: string) => (
-      <Box flexDirection="column" flexGrow={1} gap={1}>
+      <Box flexDirection="column" flexGrow={1} gap={isEditor ? 0 : 1} minWidth={isEditor ? 140 : undefined}>
         <Box flexDirection="row" justifyContent="space-between">
           <Text>
             <Text dimColor>{title}</Text>
@@ -232,9 +233,9 @@ export const register: Register = on => {
       ctx > 0 ? compact(ctx) : undefined,
     )
 
-    const divider = <Box width={1} backgroundColor="#555555" />
+    const divider = isEditor ? null : <Box width={1} backgroundColor="#555555" />
     const line = (
-      <Box flexDirection="row" gap={3} alignItems="stretch" paddingX={1}>
+      <Box flexDirection="row" gap={isEditor ? 2 : 3} alignItems={isEditor ? 'center' : 'stretch'} flexWrap={isEditor ? 'wrap' : 'nowrap'} paddingX={1}>
         {meter('session', lim.session)}
         {divider}
         {meter('weekly', lim.weekly)}
